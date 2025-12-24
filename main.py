@@ -8,7 +8,7 @@ from threading import Thread
 # --- 1. سيرفر Flask لمنع النوم ---
 app = Flask('')
 @app.route('/')
-def home(): return "Instagram Bot is Live!"
+def home(): return "Snapchat Bot is Live!"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive():
     t = Thread(target=run)
@@ -48,9 +48,9 @@ def callback_inline(call):
         bot.send_message(user_id, "✅ تم تفعيل البوت بنجاح! أرسل الرابط الآن\nBot activated successfully! Send the link now")
         bot.edit_message_reply_markup(user_id, call.message.message_id, reply_markup=None)
 
-# --- 4. معالج تحميل إنستجرام (المنشورات، الريلز، الصور) ---
+# --- 4. معالج تحميل سناب شات (قصص عامة ومنصة الأضواء) ---
 @bot.message_handler(func=lambda message: True)
-def handle_instagram(message):
+def handle_snapchat(message):
     user_id = message.chat.id
     url = message.text.strip()
 
@@ -58,44 +58,31 @@ def handle_instagram(message):
         send_welcome(message)
         return
 
-    if "instagram.com" in url:
+    if "snapchat.com" in url:
         prog = bot.reply_to(message, "⏳ جاري التحميل... | Downloading...")
         try:
-            # استخدام API وسيط قوي لإنستجرام
+            # استخدام API وسيط مخصص لسناب شات
             api_url = f"https://api.v1.savetube.me/info?url={url}"
             response = requests.get(api_url).json()
             
-            if response.get('status'):
-                media_data = response.get('data', [])
-                
-                # إذا كان المنشور يحتوي على صور أو فيديوهات متعددة (Carousel)
-                if len(media_data) > 1:
-                    media_group = []
-                    for item in media_data[:10]: # حد تليجرام 10
-                        m_url = item.get('url')
-                        if item.get('type') == 'video':
-                            media_group.append(types.InputMediaVideo(m_url))
-                        else:
-                            media_group.append(types.InputMediaPhoto(m_url))
-                    
-                    bot.send_media_group(user_id, media_group)
-                
-                # إذا كان فيديو واحد (ريلز) أو صورة واحدة
-                elif len(media_data) == 1:
-                    m_url = media_data[0].get('url')
-                    if media_data[0].get('type') == 'video':
-                        bot.send_video(user_id, m_url, caption="✅ تم التحميل بنجاح | Downloaded Successfully")
-                    else:
-                        bot.send_photo(user_id, m_url, caption="✅ تم التحميل بنجاح | Downloaded Successfully")
+            if response.get('status') and response.get('data'):
+                media_data = response['data'][0]
+                m_url = media_data.get('url')
+                m_type = media_data.get('type')
+
+                if m_type == 'video':
+                    bot.send_video(user_id, m_url, caption="✅ تم التحميل بنجاح | Downloaded Successfully")
+                else:
+                    bot.send_photo(user_id, m_url, caption="✅ تم التحميل بنجاح | Downloaded Successfully")
                 
                 bot.delete_message(user_id, prog.message_id)
             else:
-                bot.edit_message_text("❌ فشل جلب الرابط، تأكد أنه ليس حساباً خاصاً\nFailed to get link, make sure it's not private", user_id, prog.message_id)
+                bot.edit_message_text("❌ فشل جلب الرابط، تأكد أن القصة عامة وليست خاصة\nFailed to get link, make sure the story is public", user_id, prog.message_id)
         
         except Exception as e:
             bot.edit_message_text(f"❌ خطأ تقني | Technical Error", user_id, prog.message_id)
     else:
-        bot.reply_to(message, "❌ يرجى إرسال رابط إنستجرام صحيح\nPlease send a valid Instagram link")
+        bot.reply_to(message, "❌ يرجى إرسال رابط سناب شات صحيح\nPlease send a valid Snapchat link")
 
 keep_alive()
 bot.infinity_polling()
