@@ -53,7 +53,12 @@ def handle_snap(message):
 
     if "snapchat.com" in url:
         prog = bot.reply_to(message, "⏳ جاري التحميل... | Downloading...")
-        ydl_opts = {'format': 'best', 'quiet': True, 'no_warnings': True}
+        ydl_opts = {
+            'format': 'best',
+            'quiet': True,
+            'no_warnings': True,
+            'cachedir': False
+        }
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -67,10 +72,10 @@ def handle_snap(message):
         except Exception:
             bot.edit_message_text("❌ خطأ: الرابط خاص أو غير مدعوم.", user_id, prog.message_id)
 
-# --- 5. التشغيل الصحيح ---
+# --- 5. التشغيل المبسط ---
 if __name__ == "__main__":
     keep_alive()
-    # حل مشكلة الـ Conflict بطريقة صحيحة للإصدار الحالي
-    bot.remove_webhook(drop_pending_updates=True) 
+    # إزالة أي أوامر إضافية تسبب تعارض مع الإصدارات
+    bot.remove_webhook()
     print("Bot is starting...")
     bot.infinity_polling()
