@@ -19,19 +19,17 @@ SNAP_LINK = "https://snapchat.com/t/wxsuV6qD"
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
-# --- 3. نظام التحقق والمتابعة المطور (رسائل منفصلة) ---
+# --- 3. نظام التحقق والمتابعة المطور (Bold + HTML) ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.chat.id
-    
-    # رسالة الترحيب الأولى (بعد حذف سطر Start)
     welcome_text = (
-        "اهلا بك 👋🏼\n"
+        "<b>اهلا بك 👋🏼</b>\n"
         "شكرا لاستخدامك بوت تحميل السنابات 👻\n"
-        "أولا سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت\n\n"
-        "Welcome 👋🏼\n"
+        "<b>⚠️ أولاً سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت</b>\n\n"
+        "<b>Welcome 👋🏼</b>\n"
         "Thank you for using Snapchat Downloader Bot 👻\n"
-        "First, you'll need to follow my Snapchat account to activate the bot"
+        "<b>⚠️ First, you'll need to follow my Snapchat account to activate the bot</b>"
     )
     
     markup = types.InlineKeyboardMarkup()
@@ -40,36 +38,35 @@ def send_welcome(message):
     markup.add(btn_follow)
     markup.add(btn_confirm)
     
-    bot.send_message(user_id, welcome_text, reply_markup=markup)
+    bot.send_message(user_id, welcome_text, reply_markup=markup, parse_mode='HTML')
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_verification(call):
     user_id = call.message.chat.id
     
     if call.data == "snap_step_1":
-        # رسالة الاعتذار (منفصلة تماماً عن الأولى)
         fail_msg = (
-            "نعتذر منك لم يتم التحقق من متابعتك لحساب سناب شات ❌👻\n"
-            "الرجاء الضغط على متابعة الحساب وسيتم توجيهك لسناب شات وبعد المتابعة اضغط على زر تفعيل البوت 🔓\n\n"
-            "We apologize, but your Snapchat account follow request has not been verified. ❌👻\n"
-            "Please click \"Follow Account\" and you will be redirected to Snapchat. After following, click the \"Activate\" button. 🔓"
+            "<b>نعتذر منك لم يتم التحقق من متابعتك لحساب سناب شات ❌👻</b>\n"
+            "الرجاء الضغط على متابعة الحساب وسيتم توجيهك لسناب شات وبعد المتابعة اضغط على زر <b>تفعيل البوت 🔓</b>\n\n"
+            "<b>We apologize, but your Snapchat account follow request has not been verified. ❌👻</b>\n"
+            "Please click Follow Account and you will be redirected to Snapchat. After following, click the <b>Activate</b> button. 🔓"
         )
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("متابعة الحساب 👻 Follow", url=SNAP_LINK))
         markup.add(types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data="snap_step_2"))
-        bot.send_message(user_id, fail_msg, reply_markup=markup)
+        bot.send_message(user_id, fail_msg, reply_markup=markup, parse_mode='HTML')
         
     elif call.data == "snap_step_2":
         user_status[user_id] = "verified"
         success_text = (
-            "تم تفعيل البوت بنجاح ✅\n"
-            "الرجاء ارسال الرابط 🔗\n\n"
-            "The bot has been successfully activated ✅ \n"
-            "Please send the link 🔗"
+            "<b>تم تفعيل البوت بنجاح ✅</b>\n"
+            "<b>الرجاء ارسال الرابط 🔗</b>\n\n"
+            "<b>The bot has been successfully activated ✅</b>\n"
+            "<b>Please send the link 🔗</b>"
         )
-        bot.send_message(user_id, success_text)
+        bot.send_message(user_id, success_text, parse_mode='HTML')
 
-# --- 4. معالج تحميل سناب شات ---
+# --- 4. معالج تحميل سناب شات المطور ---
 @bot.message_handler(func=lambda message: True)
 def handle_snap(message):
     user_id = message.chat.id
@@ -80,12 +77,8 @@ def handle_snap(message):
         return
 
     if "snapchat.com" in url:
-        # رسالة جاري التحميل
-        loading_text = (
-            "جاري التحميل ... ⏳\n"
-            "Loading... ⏳"
-        )
-        prog = bot.reply_to(message, loading_text)
+        loading_text = "<b>جاري التحميل ... ⏳\nLoading... ⏳</b>"
+        prog = bot.reply_to(message, loading_text, parse_mode='HTML')
         
         ydl_opts = {
             'format': 'best',
@@ -102,34 +95,31 @@ def handle_snap(message):
                 if video_url:
                     bot.send_video(user_id, video_url)
                     
-                    # رسالة تم التحميل منفصلة
-                    done_text = (
-                        "تم التحميل ✅\n"
-                        "Done ✅"
-                    )
-                    bot.send_message(user_id, done_text)
+                    done_text = "<b>تم التحميل ✅\nDone ✅</b>"
+                    bot.send_message(user_id, done_text, parse_mode='HTML')
                     bot.delete_message(user_id, prog.message_id)
                 else:
                     raise Exception()
         except Exception:
-            # رسالة المشكلة التقنية الموحدة
             error_tech = (
-                "نعتذر منك نواجه الان مشكله تقنية وسيتم معالجتها في أقرب وقت ❌\n\n"
-                "We apologize, we are currently experiencing a technical issue and it will be resolved as soon as possible ❌"
+                "<b>نعتذر منك نواجه الان مشكله تقنية وسيتم معالجتها في أقرب وقت ❌</b>\n\n"
+                "<b>We apologize, we are currently experiencing a technical issue and it will be resolved as soon as possible ❌</b>"
             )
-            bot.edit_message_text(error_tech, user_id, prog.message_id)
+            bot.edit_message_text(error_tech, user_id, prog.message_id, parse_mode='HTML')
     else:
-        # رسالة الرابط الخاطئ الموحدة
         wrong_link = (
-            "الرجاء ارسال رابط الصحيح ❌\n"
-            "Please send the correct link ❌"
+            "<b>الرجاء ارسال رابط الصحيح ❌</b>\n"
+            "<b>Please send the correct link ❌</b>"
         )
-        bot.reply_to(message, wrong_link)
+        bot.reply_to(message, wrong_link, parse_mode='HTML')
 
-# --- 5. التشغيل الآمن لمنع تعارض 409 Conflict ---
+# --- 5. التشغيل الآمن ---
 if __name__ == "__main__":
     keep_alive()
-    bot.remove_webhook()
+    try:
+        bot.remove_webhook()
+    except:
+        pass
     time.sleep(1)
     print("Snap Bot is starting...")
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    bot.infinity_polling(timeout=20, long_polling_timeout=10)
