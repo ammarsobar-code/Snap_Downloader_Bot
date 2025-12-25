@@ -30,7 +30,7 @@ def send_welcome(message):
         "شكرا لاستخدامك بوت تحميل السنابات 👻\n"
         "أولا سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت\n\n"
         "Welcome 👋🏼\n"
-        "Thank you for using the Snap Downloader Bot 👻\n"
+        "Thank you for using Snapchat Downloader Bot 👻\n"
         "First, you'll need to follow my Snapchat account to activate the bot"
     )
     
