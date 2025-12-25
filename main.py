@@ -27,10 +27,10 @@ def send_welcome(message):
     # رسالة الترحيب الأولى (بعد حذف سطر Start)
     welcome_text = (
         "اهلا بك 👋🏼\n"
-        "شكرا لاستخدامك بوت حفظ السنابات 👻\n"
+        "شكرا لاستخدامك بوت تحميل السنابات 👻\n"
         "أولا سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت\n\n"
         "Welcome 👋🏼\n"
-        "Thank you for using the Snap Saver Bot 👻\n"
+        "Thank you for using the Snap Downloader Bot 👻\n"
         "First, you'll need to follow my Snapchat account to activate the bot"
     )
     
