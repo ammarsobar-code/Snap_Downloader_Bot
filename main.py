@@ -1,45 +1,38 @@
-import os, telebot, requests
+import os, telebot, yt_dlp
 from telebot import types
 from flask import Flask
 from threading import Thread
 
 app = Flask('')
 @app.route('/')
-def home(): return "Snap Live"
+def home(): return "Snapchat Engine Active"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive():
-    t = Thread(target=run)
-    t.daemon = True
-    t.start()
+    t = Thread(target=run).start()
 
 API_TOKEN = os.getenv('BOT_TOKEN')
-SNAP_LINK = "https://snapchat.com/t/wxsuV6qD" 
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
-# (نفس دالات التحقق السابقة هنا لضمان التطابق)
-
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(func=lambda m: "snapchat.com" in m.text)
 def handle_snap(message):
-    if user_status.get(message.chat.id) != "verified":
-        return
-    
     url = message.text.strip()
-    if "snapchat.com" in url:
-        prog = bot.reply_to(message, "⏳ جاري التحميل...")
-        try:
-            # استخدام API مباشر يتجنب حظر IP السيرفرات
-            res = requests.post("https://scdownloader.net/download", data={"url": url}).text
-            # ملاحظة: سنستخدم الـ API الاحتياطي في حال فشل الكشط المباشر
-            api_url = f"https://api.tikwm.com/api/extra/snapchat?url={url}"
-            data = requests.get(api_url).json()
-            if data['code'] == 0:
-                bot.send_video(message.chat.id, data['data']['url'])
-                bot.delete_message(message.chat.id, prog.message_id)
-            else:
-                bot.edit_message_text("❌ عذراً، لم نتمكن من الوصول للسنابة.", message.chat.id, prog.message_id)
-        except:
-            bot.edit_message_text("❌ خطأ تقني متكرر.", message.chat.id, prog.message_id)
+    prog = bot.reply_to(message, "⏳ جاري استخراج الفيديو... | Extracting...")
+    
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            video_url = info['url']
+            bot.send_video(message.chat.id, video_url, caption="✅ تم التحميل | Done")
+            bot.delete_message(message.chat.id, prog.message_id)
+    except Exception:
+        bot.edit_message_text("❌ عذراً، هذا الرابط خاص أو غير مدعوم حالياً.", message.chat.id, prog.message_id)
 
 keep_alive()
-bot.infinity_polling()
+bot.infinity_polling(timeout=10, long_polling_timeout=5)
