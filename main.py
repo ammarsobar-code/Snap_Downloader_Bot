@@ -1,12 +1,12 @@
-import os, telebot, yt_dlp
+import os, telebot, yt_dlp, time
 from telebot import types
 from flask import Flask
 from threading import Thread
 
-# --- 1. سيرفر Flask ---
+# --- 1. سيرفر Flask للحفاظ على نشاط البوت ---
 app = Flask('')
 @app.route('/')
-def home(): return "Snapchat Engine Active"
+def home(): return "Snapchat Downloader Live"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive():
     t = Thread(target=run)
@@ -19,27 +19,55 @@ SNAP_LINK = "https://snapchat.com/t/wxsuV6qD"
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
-# --- 3. نظام التحقق ---
+# --- 3. نظام التحقق والمتابعة المطور (رسائل منفصلة) ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.chat.id
-    user_status[user_id] = "step_1"
+    
+    # رسالة الترحيب الأولى (بعد حذف سطر Start)
+    welcome_text = (
+        "اهلا بك 👋🏼\n"
+        "شكرا لاستخدامك بوت حفظ السنابات 👻\n"
+        "أولا سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت\n\n"
+        "Welcome 👋🏼\n"
+        "Thank you for using the Snap Saver Bot 👻\n"
+        "First, you'll need to follow my Snapchat account to activate the bot"
+    )
+    
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ تمت المتابعة | Done", callback_data="check_1"))
-    msg = f"⚠️ يرجى متابعة حسابي أولاً لتفعيل البوت:\nPlease follow first:\n\n{SNAP_LINK}"
-    bot.send_message(user_id, msg, reply_markup=markup)
+    btn_follow = types.InlineKeyboardButton("متابعة الحساب 👻 Follow", url=SNAP_LINK)
+    btn_confirm = types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data="snap_step_1")
+    markup.add(btn_follow)
+    markup.add(btn_confirm)
+    
+    bot.send_message(user_id, welcome_text, reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
+def handle_verification(call):
     user_id = call.message.chat.id
-    if call.data == "check_1":
-        user_status[user_id] = "step_2"
+    
+    if call.data == "snap_step_1":
+        # رسالة الاعتذار (منفصلة تماماً عن الأولى)
+        fail_msg = (
+            "نعتذر منك لم يتم التحقق من متابعتك لحساب سناب شات ❌👻\n"
+            "الرجاء الضغط على متابعة الحساب وسيتم توجيهك لسناب شات وبعد المتابعة اضغط على زر تفعيل البوت 🔓\n\n"
+            "We apologize, but your Snapchat account follow request has not been verified. ❌👻\n"
+            "Please click \"Follow Account\" and you will be redirected to Snapchat. After following, click the \"Activate\" button. 🔓"
+        )
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("✅ تأكيد | Confirm", callback_data="check_final"))
-        bot.send_message(user_id, f"❌ لم يتم التحقق بعد، تأكد من المتابعة:\n\n{SNAP_LINK}", reply_markup=markup)
-    elif call.data == "check_final":
+        markup.add(types.InlineKeyboardButton("متابعة الحساب 👻 Follow", url=SNAP_LINK))
+        markup.add(types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data="snap_step_2"))
+        bot.send_message(user_id, fail_msg, reply_markup=markup)
+        
+    elif call.data == "snap_step_2":
         user_status[user_id] = "verified"
-        bot.send_message(user_id, "✅ تم تفعيل البوت بنجاح! أرسل الرابط الآن")
+        success_text = (
+            "تم تفعيل البوت بنجاح ✅\n"
+            "الرجاء ارسال الرابط 🔗\n\n"
+            "The bot has been successfully activated ✅ \n"
+            "Please send the link 🔗"
+        )
+        bot.send_message(user_id, success_text)
 
 # --- 4. معالج تحميل سناب شات ---
 @bot.message_handler(func=lambda message: True)
@@ -52,7 +80,13 @@ def handle_snap(message):
         return
 
     if "snapchat.com" in url:
-        prog = bot.reply_to(message, "⏳ جاري التحميل... | Downloading...")
+        # رسالة جاري التحميل
+        loading_text = (
+            "جاري التحميل ... ⏳\n"
+            "Loading... ⏳"
+        )
+        prog = bot.reply_to(message, loading_text)
+        
         ydl_opts = {
             'format': 'best',
             'quiet': True,
@@ -64,18 +98,38 @@ def handle_snap(message):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 video_url = info.get('url')
+                
                 if video_url:
-                    bot.send_video(user_id, video_url, caption="✅ Done")
+                    bot.send_video(user_id, video_url)
+                    
+                    # رسالة تم التحميل منفصلة
+                    done_text = (
+                        "تم التحميل ✅\n"
+                        "Done ✅"
+                    )
+                    bot.send_message(user_id, done_text)
                     bot.delete_message(user_id, prog.message_id)
                 else:
-                    bot.edit_message_text("❌ لم يتم العثور على ميديا عامة.", user_id, prog.message_id)
+                    raise Exception()
         except Exception:
-            bot.edit_message_text("❌ خطأ: الرابط خاص أو غير مدعوم.", user_id, prog.message_id)
+            # رسالة المشكلة التقنية الموحدة
+            error_tech = (
+                "نعتذر منك نواجه الان مشكله تقنية وسيتم معالجتها في أقرب وقت ❌\n\n"
+                "We apologize, we are currently experiencing a technical issue and it will be resolved as soon as possible ❌"
+            )
+            bot.edit_message_text(error_tech, user_id, prog.message_id)
+    else:
+        # رسالة الرابط الخاطئ الموحدة
+        wrong_link = (
+            "الرجاء ارسال رابط الصحيح ❌\n"
+            "Please send the correct link ❌"
+        )
+        bot.reply_to(message, wrong_link)
 
-# --- 5. التشغيل المبسط ---
+# --- 5. التشغيل الآمن لمنع تعارض 409 Conflict ---
 if __name__ == "__main__":
     keep_alive()
-    # إزالة أي أوامر إضافية تسبب تعارض مع الإصدارات
     bot.remove_webhook()
-    print("Bot is starting...")
-    bot.infinity_polling()
+    time.sleep(1)
+    print("Snap Bot is starting...")
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
