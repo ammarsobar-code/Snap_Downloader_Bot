@@ -1,4 +1,4 @@
-import os, telebot, yt_dlp, time
+import os, telebot, yt_dlp, time, sys, shutil, subprocess
 from telebot import types
 from flask import Flask
 from threading import Thread
@@ -13,13 +13,28 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# --- 2. إعدادات البوت ---
+# --- 2. وظيفة التنظيف العميق (الإضافة الجديدة) ---
+def reset_server_environment():
+    """تنظيف شامل للمساحة والعمليات العالقة لضمان عدم توقف البوت"""
+    # 1. مسح مجلد التخزين المؤقت لـ yt-dlp
+    try:
+        subprocess.run([sys.executable, "-m", "yt_dlp", "--rm-cache-dir"], stderr=subprocess.DEVNULL)
+    except: pass
+
+    # 2. قتل العمليات التي لم تنتهِ (تسبب تعليق السيرفر في Render)
+    if os.name != 'nt':
+        try:
+            subprocess.run(["pkill", "-9", "-f", "yt-dlp"], stderr=subprocess.DEVNULL)
+        except: pass
+    print("🧹 System Cleaned & Ready for next request")
+
+# --- 3. إعدادات البوت ---
 API_TOKEN = os.getenv('BOT_TOKEN')
 SNAP_LINK = "https://snapchat.com/t/wxsuV6qD" 
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
-# --- 3. نظام التحقق والمتابعة المطور (Bold + HTML) ---
+# --- نظام التحقق والمتابعة المطور (Bold + HTML) ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.chat.id
@@ -66,7 +81,7 @@ def handle_verification(call):
         )
         bot.send_message(user_id, success_text, parse_mode='HTML')
 
-# --- 4. معالج تحميل سناب شات المطور ---
+# --- 4. معالج تحميل سناب شات المطور مع ميزة التنظيف ---
 @bot.message_handler(func=lambda message: True)
 def handle_snap(message):
     user_id = message.chat.id
@@ -84,7 +99,8 @@ def handle_snap(message):
             'format': 'best',
             'quiet': True,
             'no_warnings': True,
-            'cachedir': False
+            'cachedir': False,
+            'nocheckcertificate': True
         }
         
         try:
@@ -94,7 +110,6 @@ def handle_snap(message):
                 
                 if video_url:
                     bot.send_video(user_id, video_url)
-                    
                     done_text = "<b>تم التحميل ✅\nDone ✅</b>"
                     bot.send_message(user_id, done_text, parse_mode='HTML')
                     bot.delete_message(user_id, prog.message_id)
@@ -106,6 +121,10 @@ def handle_snap(message):
                 "<b>We apologize, we are currently experiencing a technical issue and it will be resolved as soon as possible ❌</b>"
             )
             bot.edit_message_text(error_tech, user_id, prog.message_id, parse_mode='HTML')
+        finally:
+            # استدعاء التنظيف بعد كل عملية (حتى لو فشلت)
+            reset_server_environment()
+            
     else:
         wrong_link = (
             "<b>الرجاء ارسال رابط الصحيح ❌</b>\n"
@@ -122,4 +141,5 @@ if __name__ == "__main__":
         pass
     time.sleep(1)
     print("Snap Bot is starting...")
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+    # تعديل البولينج ليكون أكثر استقراراً
+    bot.infinity_polling(timeout=20, long_polling_timeout=10, restart_on_change=False)
