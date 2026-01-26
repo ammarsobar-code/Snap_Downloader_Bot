@@ -56,78 +56,39 @@ def get_welcome_markup(step=1):
     markup.add(types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data=callback_val))
     return markup
 
-# --- 4. محرك التحميل المطور ---
+# --- 4. محركات التحميل ---
 def dl_tiktok(url):
     try:
         res = requests.get(f"https://www.tikwm.com/api/?url={url}", timeout=10).json()
         if res.get('code') == 0: return res['data']
     except: return None
 
-def dl_insta_advanced(url, chat_id, prog_id):
+def dl_insta_advanced(url, chat_id):
     c_path = prepare_cookies()
-    ydl_opts = {
-        'quiet': True,
-        'cachedir': False,
-        'cookiefile': c_path,
-        'nocheckcertificate': True
-    }
-    
+    ydl_opts = {'quiet': True, 'cachedir': False, 'cookiefile': c_path, 'nocheckcertificate': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        
-        # إذا كان المنشور يحتوي على صور/فيديوهات متعددة (Carousel)
         if 'entries' in info:
-            media_group = []
-            for entry in info['entries']:
-                if entry.get('vcodec') != 'none':
-                    media_group.append(types.InputMediaVideo(entry['url']))
-                else:
-                    media_group.append(types.InputMediaPhoto(entry['url']))
-            bot.send_media_group(chat_id, media_group[:10]) # بحد أقصى 10
-        
-        # إذا كان رابط واحد (فيديو أو صورة)
+            media = []
+            for e in info['entries']:
+                if e.get('vcodec') != 'none': media.append(types.InputMediaVideo(e['url']))
+                else: media.append(types.InputMediaPhoto(e['url']))
+            bot.send_media_group(chat_id, media[:10])
         else:
-            if info.get('vcodec') != 'none':
-                bot.send_video(chat_id, info['url'], caption="✅ تم التحميل بنجاح")
-            else:
-                bot.send_photo(chat_id, info['url'], caption="✅ تم التحميل بنجاح")
-    
+            if info.get('vcodec') != 'none': bot.send_video(chat_id, info['url'], caption="✅ Done")
+            else: bot.send_photo(chat_id, info['url'], caption="✅ Done")
     if c_path and os.path.exists(c_path): os.remove(c_path)
 
-def dl_ytdlp_generic(url):
-    opts = {'format': 'best', 'quiet': True, 'cachedir': False}
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info.get('url')
+def dl_generic(url):
+    with yt_dlp.YoutubeDL({'format': 'best', 'quiet': True}) as ydl:
+        return ydl.extract_info(url, download=False).get('url')
 
-# --- 5. نظام التحقق والردود ---
+# --- 5. المعالجات ونظام التحقق ---
 @bot.message_handler(commands=['start'])
 def start(m):
-    text = "<b>أهلاً بك 👋🏼 في بوت التحميل الشامل</b>\n\n⚠️ يرجى متابعة حساب السناب شات أولاً لتفعيل البوت:"
-    bot.send_message(m.chat.id, text, reply_markup=get_welcome_markup(step=1), parse_mode='HTML')
+    text = "<b>أهلاً بك 👋🏼 في بوت التحميل الشامل</b>\n\n⚠️ يرجى متابعة حساب السناب شات أولاً:"
+    bot.send_message(m.chat.id, text, reply_markup=get_welcome_markup(1), parse_mode='HTML')
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('verify'))
 def verify_handler(call):
-    uid = call.message.chat.id
-    
-    if call.data == "verify_1":
-        # إرسال رسالة فشل جديدة بدلاً من تعديل السابقة
-        fail_text = "<b>نعتذر منك لم يتم التحقق من المتابعة ❌👻</b>\nالرجاء التأكد من المتابعة ثم الضغط على زر التفعيل بالأسفل مجدداً."
-        bot.send_message(uid, fail_text, reply_markup=get_welcome_markup(step=2), parse_mode='HTML')
-        
-    elif call.data == "verify_2":
-        user_status[uid] = "verified"
-        success_text = "<b>تم تفعيل البوت بنجاح ✅\nالآن أرسل أي رابط (Snap, TikTok, Insta, X)</b>"
-        bot.send_message(uid, success_text, parse_mode='HTML')
-
-@bot.message_handler(func=lambda m: True)
-def handle_all_links(m):
-    uid = m.chat.id
-    url = m.text.strip()
-    
-    if user_status.get(uid) != "verified":
-        start(m); return
-
-    prog = bot.reply_to(m, "<b>جاري المعالجة... ⏳</b>", parse_mode='HTML')
-    try:
-        if
+    uid = call.message
