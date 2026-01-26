@@ -13,17 +13,13 @@ def run():
     app.run(host='0.0.0.0', port=port)
 
 # --- 2. محركات البحث الاحترافية للإنستغرام ---
-
 def get_insta_media(url):
-    """محاولة جلب البيانات عبر API وسيط (أقوى من المكتبات العادية)"""
     try:
-        # المحرك الأول: خدمة vkrdown
         res = requests.get(f"https://api.vkrdown.com/instainfo/?url={url}", timeout=10).json()
         if res.get('success') and res.get('data'):
             return res['data']
     except:
         try:
-            # المحرك الثاني (احتياطي): خدمة ddl-api
             res = requests.get(f"https://api.douyin.wtf/api?url={url}", timeout=10).json()
             if res.get('url'): return res
         except: return None
@@ -34,6 +30,23 @@ API_TOKEN = os.getenv('BOT_TOKEN')
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
+# النص الجديد للترحيب
+WELCOME_TEXT = (
+    "<b>أهلاً بك 👋🏼 في بوت التحميل الشامل 🚀</b>\n\n"
+    "<b>يخدمك البوت في تحميل كل من:</b>\n"
+    "👻 • صور ومقاطع القصص العامة في سناب شات\n"
+    "🎵 • صور ومقاطع الحسابات العامة في تيك توك\n"
+    "📸 • صور وفيديوهات الحسابات العامة في انستقرام\n"
+    "📱 • مقاطع فيديو الحسابات العامة في منصة إكس\n\n"
+    "⚠️ <b>لتفعيل البوت:</b> يرجى متابعة حسابي في سناب شات أولاً ثم الضغط على زر التفعيل بالأسفل 👇🏼"
+)
+
+# النص الجديد للخطأ
+ERROR_TEXT = (
+    "<b>عذراً، لم نتمكن من تحميل هذا الرابط ❌</b>\n\n"
+    "قد يحتوي الرابط على محتوى حساس ⚠️ أو حجمه كبير جداً 📁، وتفادياً لثقل البوت تم رفض التحميل."
+)
+
 def get_welcome_markup(step=1):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("متابعة الحساب 👻 Follow", url="https://snapchat.com/t/wxsuV6qD"))
@@ -41,65 +54,61 @@ def get_welcome_markup(step=1):
     return markup
 
 # --- 4. المعالجة الرئيسية ---
-
 def handle_insta(url, chat_id):
-    """معالجة الإنستغرام بنظام المحركات المتعددة"""
     data = get_insta_media(url)
-    
     if data:
         media_group = []
-        # إذا كانت البيانات قائمة (صور متعددة)
         if isinstance(data, list):
             for item in data:
                 u = item.get('url')
+                if not u: continue
                 if item.get('type') == 'video': media_group.append(types.InputMediaVideo(u))
                 else: media_group.append(types.InputMediaPhoto(u))
         
-        # إرسال الوسائط
         if len(media_group) > 1:
             bot.send_media_group(chat_id, media_group[:10])
         elif len(media_group) == 1:
             if isinstance(media_group[0], types.InputMediaVideo): bot.send_video(chat_id, media_group[0].media)
             else: bot.send_photo(chat_id, media_group[0].media)
         else:
-            # محاولة أخيرة عبر yt-dlp إذا فشل الـ API
             with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
                 info = ydl.extract_info(url, download=False)
                 bot.send_video(chat_id, info['url'])
     else:
-        bot.send_message(chat_id, "❌ عذراً، لم نتمكن من جلب هذا المنشور. قد يكون الحساب خاصاً.")
+        bot.send_message(chat_id, ERROR_TEXT, parse_mode='HTML')
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    bot.send_message(m.chat.id, "<b>أهلاً بك 👋🏼 يرجى المتابعة للتفعيل:</b>", 
-                     reply_markup=get_welcome_markup(1), parse_mode='HTML')
+    bot.send_message(m.chat.id, WELCOME_TEXT, reply_markup=get_welcome_markup(1), parse_mode='HTML')
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('verify'))
 def verify_handler(call):
     uid = call.message.chat.id
     if call.data == "verify_1":
-        bot.send_message(uid, "<b>نعتذر لم يتم التحقق ❌</b>\nحاول مجدداً بعد المتابعة.", 
+        bot.send_message(uid, "<b>نعتذر منك، لم يتم التحقق من المتابعة ❌👻</b>\nيرجى التأكد من المتابعة ثم الضغط على زر التفعيل مجدداً.", 
                          reply_markup=get_welcome_markup(2), parse_mode='HTML')
     else:
         user_status[uid] = "verified"
-        bot.send_message(uid, "<b>تم التفعيل بنجاح ✅ أرسل الرابط الآن</b>", parse_mode='HTML')
+        bot.send_message(uid, "<b>تم تفعيل البوت بنجاح ✅🚀</b>\nيمكنك الآن إرسال أي رابط للتحميل مباشرة.", parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: True)
 def handle_all(m):
-    if user_status.get(m.chat.id) != "verified": return start(m)
+    uid = m.chat.id
+    if user_status.get(uid) != "verified": return start(m)
+    
     url = m.text.strip()
     prog = bot.reply_to(m, "<b>جاري التحميل... ⏳</b>", parse_mode='HTML')
     
     try:
         if "instagram.com" in url:
-            handle_insta(url, m.chat.id)
+            handle_insta(url, uid)
         elif any(d in url for d in ["tiktok.com", "x.com", "snapchat.com"]):
             with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
                 info = ydl.extract_info(url, download=False)
-                bot.send_video(m.chat.id, info['url'])
-        bot.delete_message(m.chat.id, prog.message_id)
+                bot.send_video(uid, info['url'])
+        bot.delete_message(uid, prog.message_id)
     except:
-        bot.edit_message_text("❌ فشل التحميل، تأكد من الرابط.", m.chat.id, prog.message_id)
+        bot.edit_message_text(ERROR_TEXT, uid, prog.message_id, parse_mode='HTML')
 
 if __name__ == "__main__":
     Thread(target=run).start()
