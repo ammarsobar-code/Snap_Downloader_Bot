@@ -5,17 +5,18 @@ from threading import Thread
 
 # --- 1. إعدادات السيرفر ---
 app = Flask('')
+
 @app.route('/')
-def home(): return "Multi-Downloader Bot is Online 24/7"
+def home():
+    return "Bot is Running", 200
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 def run():
     port = int(os.environ.get("PORT", 8000))
     app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.daemon = True
-    t.start()
 
 # --- 2. وظائف التنظيف والكوكيز ---
 def auto_clean():
@@ -91,4 +92,49 @@ def start(m):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('verify'))
 def verify_handler(call):
-    uid = call.message
+    uid = call.message.chat.id
+    if call.data == "verify_1":
+        fail = "<b>نعتذر منك لم يتم التحقق ❌👻</b>\nيرجى المتابعة ثم الضغط على تفعيل مجدداً."
+        bot.send_message(uid, fail, reply_markup=get_welcome_markup(2), parse_mode='HTML')
+    elif call.data == "verify_2":
+        user_status[uid] = "verified"
+        bot.send_message(uid, "<b>تم التفعيل بنجاح ✅ أرسل الرابط الآن</b>", parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: True)
+def handle_all(m):
+    uid = m.chat.id
+    url = m.text.strip()
+    if user_status.get(uid) != "verified":
+        start(m); return
+
+    prog = bot.reply_to(m, "<b>جاري المعالجة... ⏳</b>", parse_mode='HTML')
+    try:
+        if "tiktok.com" in url or "douyin.com" in url:
+            data = dl_tiktok(url)
+            if data and data.get('images'):
+                bot.send_media_group(uid, [types.InputMediaPhoto(i) for i in data['images'][:10]])
+            elif data and data.get('play'): bot.send_video(uid, data['play'])
+            else: bot.send_video(uid, dl_generic(url))
+        elif "instagram.com" in url:
+            dl_insta_advanced(url, uid)
+        elif any(d in url for d in ["x.com", "twitter.com", "snapchat.com"]):
+            bot.send_video(uid, dl_generic(url))
+        else:
+            bot.edit_message_text("<b>الرابط غير مدعوم ❌</b>", uid, prog.message_id)
+            return
+        bot.delete_message(uid, prog.message_id)
+    except:
+        bot.edit_message_text("<b>فشل التحميل ❌</b>", uid, prog.message_id)
+    finally:
+        auto_clean()
+
+# --- 6. التشغيل النهائي ---
+if __name__ == "__main__":
+    auto_clean()
+    # تشغيل Flask في الخلفية
+    t = Thread(target=run)
+    t.start()
+    
+    print("Bot is Polling...")
+    # تشغيل البوت في الواجهة الأساسية لمنع Exit code 0
+    bot.infinity_polling(timeout=60, long_polling_timeout=30)
