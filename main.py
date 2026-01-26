@@ -3,13 +3,12 @@ from telebot import types
 from flask import Flask
 from threading import Thread
 
-# --- 1. إعدادات السيرفر والبقاء حياً على Koyeb ---
+# --- 1. إعدادات السيرفر ---
 app = Flask('')
 @app.route('/')
 def home(): return "Multi-Downloader Bot is Online 24/7"
 
 def run():
-    # استخدام المنفذ 8000 كما في إعدادات Koyeb الخاصة بك
     port = int(os.environ.get("PORT", 8000))
     app.run(host='0.0.0.0', port=port)
 
@@ -18,9 +17,8 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# --- 2. وظائف التنظيف وإدارة الكوكيز ---
+# --- 2. وظائف التنظيف والكوكيز ---
 def auto_clean():
-    """تنظيف الذاكرة والكاش لضمان استقرار البوت"""
     try:
         subprocess.run([sys.executable, "-m", "yt_dlp", "--rm-cache-dir"], stderr=subprocess.DEVNULL)
         if os.path.exists("downloads"):
@@ -29,7 +27,6 @@ def auto_clean():
     except: pass
 
 def prepare_cookies():
-    """تحويل ملف JSON إلى تنسيق Netscape الذي يفهمه yt-dlp"""
     path = "cookies.json"
     if not os.path.exists(path): return None
     try:
@@ -46,37 +43,64 @@ def prepare_cookies():
         return tmp.name
     except: return None
 
-# --- 3. إعدادات البوت والقائمة ---
+# --- 3. إعدادات البوت ---
 API_TOKEN = os.getenv('BOT_TOKEN')
 SNAP_LINK = "https://snapchat.com/t/wxsuV6qD"
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
 def get_welcome_markup(step=1):
-    """إنشاء أزرار التحقق بناءً على المرحلة"""
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("متابعة الحساب 👻 Follow", url=SNAP_LINK))
     callback_val = "verify_1" if step == 1 else "verify_2"
     markup.add(types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data=callback_val))
     return markup
 
-# --- 4. محركات التحميل ---
+# --- 4. محرك التحميل المطور ---
 def dl_tiktok(url):
     try:
         res = requests.get(f"https://www.tikwm.com/api/?url={url}", timeout=10).json()
         if res.get('code') == 0: return res['data']
     except: return None
 
-def dl_ytdlp(url, cookie_path=None, is_insta=False):
-    opts = {'format': 'best', 'quiet': True, 'cachedir': False, 'nocheckcertificate': True}
-    if cookie_path: opts['cookiefile'] = cookie_path
-    if is_insta: opts['outtmpl'] = 'downloads/%(id)s.%(ext)s'
+def dl_insta_advanced(url, chat_id, prog_id):
+    c_path = prepare_cookies()
+    ydl_opts = {
+        'quiet': True,
+        'cachedir': False,
+        'cookiefile': c_path,
+        'nocheckcertificate': True
+    }
     
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=is_insta)
-        return ydl.prepare_filename(info) if is_insta else info.get('url')
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        
+        # إذا كان المنشور يحتوي على صور/فيديوهات متعددة (Carousel)
+        if 'entries' in info:
+            media_group = []
+            for entry in info['entries']:
+                if entry.get('vcodec') != 'none':
+                    media_group.append(types.InputMediaVideo(entry['url']))
+                else:
+                    media_group.append(types.InputMediaPhoto(entry['url']))
+            bot.send_media_group(chat_id, media_group[:10]) # بحد أقصى 10
+        
+        # إذا كان رابط واحد (فيديو أو صورة)
+        else:
+            if info.get('vcodec') != 'none':
+                bot.send_video(chat_id, info['url'], caption="✅ تم التحميل بنجاح")
+            else:
+                bot.send_photo(chat_id, info['url'], caption="✅ تم التحميل بنجاح")
+    
+    if c_path and os.path.exists(c_path): os.remove(c_path)
 
-# --- 5. معالجة الرسائل والتحقق (نظام الضغطتين) ---
+def dl_ytdlp_generic(url):
+    opts = {'format': 'best', 'quiet': True, 'cachedir': False}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return info.get('url')
+
+# --- 5. نظام التحقق والردود ---
 @bot.message_handler(commands=['start'])
 def start(m):
     text = "<b>أهلاً بك 👋🏼 في بوت التحميل الشامل</b>\n\n⚠️ يرجى متابعة حساب السناب شات أولاً لتفعيل البوت:"
@@ -87,16 +111,14 @@ def verify_handler(call):
     uid = call.message.chat.id
     
     if call.data == "verify_1":
-        # المرحلة الأولى: إظهار رسالة الفشل وتغيير الزر لـ verify_2
-        fail_text = "<b>نعتذر منك لم يتم التحقق من المتابعة ❌👻</b>\nالرجاء التأكد من المتابعة ثم الضغط على زر التفعيل مرة أخرى."
-        bot.edit_message_text(fail_text, uid, call.message.message_id, 
-                              reply_markup=get_welcome_markup(step=2), parse_mode='HTML')
+        # إرسال رسالة فشل جديدة بدلاً من تعديل السابقة
+        fail_text = "<b>نعتذر منك لم يتم التحقق من المتابعة ❌👻</b>\nالرجاء التأكد من المتابعة ثم الضغط على زر التفعيل بالأسفل مجدداً."
+        bot.send_message(uid, fail_text, reply_markup=get_welcome_markup(step=2), parse_mode='HTML')
         
     elif call.data == "verify_2":
-        # المرحلة الثانية: التفعيل بنجاح
         user_status[uid] = "verified"
         success_text = "<b>تم تفعيل البوت بنجاح ✅\nالآن أرسل أي رابط (Snap, TikTok, Insta, X)</b>"
-        bot.edit_message_text(success_text, uid, call.message.message_id, parse_mode='HTML')
+        bot.send_message(uid, success_text, parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: True)
 def handle_all_links(m):
@@ -108,42 +130,4 @@ def handle_all_links(m):
 
     prog = bot.reply_to(m, "<b>جاري المعالجة... ⏳</b>", parse_mode='HTML')
     try:
-        # --- TikTok ---
-        if "tiktok.com" in url or "douyin.com" in url:
-            data = dl_tiktok(url)
-            if data and data.get('images'):
-                bot.send_media_group(uid, [types.InputMediaPhoto(i) for i in data['images'][:10]])
-            elif data and data.get('play'):
-                bot.send_video(uid, data['play'])
-            else:
-                bot.send_video(uid, dl_ytdlp(url))
-
-        # --- Instagram ---
-        elif "instagram.com" in url:
-            c_path = prepare_cookies()
-            f_path = dl_ytdlp(url, c_path, is_insta=True)
-            with open(f_path, 'rb') as v: bot.send_video(uid, v)
-            if os.path.exists(f_path): os.remove(f_path)
-            if c_path and os.path.exists(c_path): os.remove(c_path)
-
-        # --- X & Snap ---
-        elif any(domain in url for domain in ["x.com", "twitter.com", "snapchat.com"]):
-            video_url = dl_ytdlp(url)
-            bot.send_video(uid, video_url)
-
-        else:
-            bot.edit_message_text("<b>الرابط غير مدعوم أو غير صحيح ❌</b>", uid, prog.message_id, parse_mode='HTML')
-            return
-
-        bot.delete_message(uid, prog.message_id)
-    except Exception:
-        bot.edit_message_text("<b>عذراً، حدث خطأ أثناء التحميل ❌</b>", uid, prog.message_id, parse_mode='HTML')
-    finally:
-        auto_clean()
-
-# --- 6. التشغيل النهائي ---
-if __name__ == "__main__":
-    keep_alive()
-    auto_clean()
-    print("Multi-Bot is Online...")
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+        if
