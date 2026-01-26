@@ -1,4 +1,4 @@
-import os, telebot, yt_dlp, time, sys, requests, json, tempfile
+import os, telebot, yt_dlp, time, sys, requests, json, tempfile, re
 from telebot import types
 from flask import Flask
 from threading import Thread
@@ -30,21 +30,19 @@ API_TOKEN = os.getenv('BOT_TOKEN')
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
-# النص الجديد للترحيب
 WELCOME_TEXT = (
     "<b>أهلاً بك 👋🏼 في بوت التحميل الشامل 🚀</b>\n\n"
     "<b>يخدمك البوت في تحميل كل من:</b>\n"
     "👻 • صور ومقاطع القصص العامة في سناب شات\n"
     "🎵 • صور ومقاطع الحسابات العامة في تيك توك\n"
-    "📸 • صور وفيديوهات الحسابات العامة في انستقرام\n"
+    "📸 • مقاطع فيديو الحسابات العامة والريلز في انستقرام\n"
     "📱 • مقاطع فيديو الحسابات العامة في منصة إكس\n\n"
     "⚠️ <b>لتفعيل البوت:</b> يرجى متابعة حسابي في سناب شات أولاً ثم الضغط على زر التفعيل بالأسفل 👇🏼"
 )
 
-# النص الجديد للخطأ
 ERROR_TEXT = (
     "<b>عذراً، لم نتمكن من تحميل هذا الرابط ❌</b>\n\n"
-    "قد يحتوي الرابط على محتوى حساس ⚠️ أو حجمه كبير جداً 📁، وتفادياً لثقل البوت تم رفض التحميل."
+    "قد يكون الحساب خاص أو الرابط يحتوي على محتوى حساس ⚠️ أو حجمه كبير جداً 📁، وتفادياً لثقل البوت تم رفض التحميل."
 )
 
 def get_welcome_markup(step=1):
@@ -97,15 +95,27 @@ def handle_all(m):
     if user_status.get(uid) != "verified": return start(m)
     
     url = m.text.strip()
+    
+    # التحقق: إذا لم يكن النص رابطاً يبدأ بـ http
+    if not re.match(r'^https?://', url):
+        # ملصق "تنبيه" (يمكنك تغيير الـ ID بملصقك الخاص)
+        bot.send_sticker(uid, "CAACAgIAAxkBAAEL6ZlmB_3_S1s_Sample_ID") 
+        bot.send_message(uid, "<b>عذراً، يرجى إرسال رابط صحيح من المنصات المدعومة فقط 🔗⚠️</b>", parse_mode='HTML')
+        return
+
     prog = bot.reply_to(m, "<b>جاري التحميل... ⏳</b>", parse_mode='HTML')
     
     try:
         if "instagram.com" in url:
             handle_insta(url, uid)
-        elif any(d in url for d in ["tiktok.com", "x.com", "snapchat.com"]):
+        elif any(d in url for d in ["tiktok.com", "x.com", "twitter.com", "snapchat.com"]):
             with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
                 info = ydl.extract_info(url, download=False)
                 bot.send_video(uid, info['url'])
+        else:
+            bot.edit_message_text("<b>عذراً، هذا الرابط غير مدعوم حالياً ❌</b>", uid, prog.message_id, parse_mode='HTML')
+            return
+
         bot.delete_message(uid, prog.message_id)
     except:
         bot.edit_message_text(ERROR_TEXT, uid, prog.message_id, parse_mode='HTML')
