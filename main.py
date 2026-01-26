@@ -3,16 +3,11 @@ from telebot import types
 from flask import Flask
 from threading import Thread
 
-# --- 1. إعدادات السيرفر ---
+# --- 1. إعدادات السيرفر (Koyeb) ---
 app = Flask('')
 
 @app.route('/')
-def home():
-    return "Bot is Running", 200
-
-@app.route('/health')
-def health():
-    return "OK", 200
+def home(): return "Multi-Bot is Live", 200
 
 def run():
     port = int(os.environ.get("PORT", 8000))
@@ -57,7 +52,7 @@ def get_welcome_markup(step=1):
     markup.add(types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data=callback_val))
     return markup
 
-# --- 4. محركات التحميل ---
+# --- 4. محركات التحميل المتطورة ---
 def dl_tiktok(url):
     try:
         res = requests.get(f"https://www.tikwm.com/api/?url={url}", timeout=10).json()
@@ -66,19 +61,31 @@ def dl_tiktok(url):
 
 def dl_insta_advanced(url, chat_id):
     c_path = prepare_cookies()
-    ydl_opts = {'quiet': True, 'cachedir': False, 'cookiefile': c_path, 'nocheckcertificate': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if 'entries' in info:
-            media = []
-            for e in info['entries']:
-                if e.get('vcodec') != 'none': media.append(types.InputMediaVideo(e['url']))
-                else: media.append(types.InputMediaPhoto(e['url']))
-            bot.send_media_group(chat_id, media[:10])
-        else:
-            if info.get('vcodec') != 'none': bot.send_video(chat_id, info['url'], caption="✅ Done")
-            else: bot.send_photo(chat_id, info['url'], caption="✅ Done")
-    if c_path and os.path.exists(c_path): os.remove(c_path)
+    ydl_opts = {
+        'quiet': True, 'no_warnings': True, 'cachedir': False,
+        'cookiefile': c_path, 'nocheckcertificate': True, 'extract_flat': False
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            # ألبومات (Carousel)
+            if 'entries' in info:
+                media = []
+                for e in info['entries']:
+                    if e.get('vcodec') != 'none': media.append(types.InputMediaVideo(e['url']))
+                    else: media.append(types.InputMediaPhoto(e['url']))
+                for i in range(0, len(media), 10):
+                    bot.send_media_group(chat_id, media[i:i+10])
+            # منشور مفرد
+            else:
+                if info.get('vcodec') != 'none' or info.get('video_ext') != 'none':
+                    bot.send_video(chat_id, info['url'], caption="✅ تم تحميل الفيديو")
+                else:
+                    bot.send_photo(chat_id, info.get('url') or info.get('thumbnail'), caption="✅ تم تحميل الصورة")
+    except:
+        bot.send_message(chat_id, "❌ فشل التحميل. تأكد من أن الحساب عام (Public).")
+    finally:
+        if c_path and os.path.exists(c_path): os.remove(c_path)
 
 def dl_generic(url):
     with yt_dlp.YoutubeDL({'format': 'best', 'quiet': True}) as ydl:
@@ -131,10 +138,11 @@ def handle_all(m):
 # --- 6. التشغيل النهائي ---
 if __name__ == "__main__":
     auto_clean()
-    # تشغيل Flask في الخلفية
-    t = Thread(target=run)
-    t.start()
-    
-    print("Bot is Polling...")
-    # تشغيل البوت في الواجهة الأساسية لمنع Exit code 0
-    bot.infinity_polling(timeout=60, long_polling_timeout=30)
+    Thread(target=run).start()
+    try:
+        bot.remove_webhook() # لمسح أي تضارب سابق
+        print("Bot is Polling...")
+        bot.infinity_polling(timeout=60, long_polling_timeout=30)
+    except Exception as e:
+        print(f"Polling Error: {e}")
+        time.sleep(5)
