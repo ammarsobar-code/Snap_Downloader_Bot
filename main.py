@@ -1,50 +1,62 @@
-import os, telebot, yt_dlp, time, sys, shutil, subprocess
+import os
+import telebot
+import yt_dlp
+import time
+import sys
+import subprocess
 from telebot import types
 from flask import Flask
 from threading import Thread
 
-# --- 1. سيرفر Flask للحفاظ على نشاط البوت ---
+# --- 1. سيرفر Flask للحفاظ على نشاط البوت وتوافق المنصة ---
 app = Flask('')
+
 @app.route('/')
-def home(): return "Snapchat Downloader Live"
-def run(): app.run(host='0.0.0.0', port=8080)
+def home():
+    return "Snapchat Downloader is Running 24/7"
+
+def run():
+    # تعديل المنفذ ليتوافق مع إعدادات Koyeb (8000)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host='0.0.0.0', port=port)
+
 def keep_alive():
     t = Thread(target=run)
     t.daemon = True
     t.start()
 
-# --- 2. وظيفة التنظيف العميق (الإضافة الجديدة) ---
+# --- 2. وظيفة التنظيف العميق ---
 def reset_server_environment():
-    """تنظيف شامل للمساحة والعمليات العالقة لضمان عدم توقف البوت"""
-    # 1. مسح مجلد التخزين المؤقت لـ yt-dlp
+    """تنظيف شامل للمساحة والعمليات العالقة"""
     try:
+        # مسح كاش yt-dlp
         subprocess.run([sys.executable, "-m", "yt_dlp", "--rm-cache-dir"], stderr=subprocess.DEVNULL)
-    except: pass
+    except:
+        pass
 
-    # 2. قتل العمليات التي لم تنتهِ (تسبب تعليق السيرفر في Render)
     if os.name != 'nt':
         try:
+            # قتل أي عمليات معلقة لـ yt-dlp
             subprocess.run(["pkill", "-9", "-f", "yt-dlp"], stderr=subprocess.DEVNULL)
-        except: pass
-    print("🧹 System Cleaned & Ready for next request")
+        except:
+            pass
+    print("🧹 System Cleaned & Ready")
 
 # --- 3. إعدادات البوت ---
+# سيقوم البوت بسحب التوكن من Environment Variables في Koyeb
 API_TOKEN = os.getenv('BOT_TOKEN')
 SNAP_LINK = "https://snapchat.com/t/wxsuV6qD" 
 bot = telebot.TeleBot(API_TOKEN)
 user_status = {}
 
-# --- نظام التحقق والمتابعة المطور (Bold + HTML) ---
+# --- نظام التحقق والمتابعة ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.chat.id
     welcome_text = (
         "<b>اهلا بك 👋🏼</b>\n"
         "شكرا لاستخدامك بوت تحميل السنابات 👻\n"
-        "<b>⚠️ أولاً سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت</b>\n\n"
-        "<b>Welcome 👋🏼</b>\n"
-        "Thank you for using Snapchat Downloader Bot 👻\n"
-        "<b>⚠️ First, you'll need to follow my Snapchat account to activate the bot</b>"
+        "<b>⚠️ أولاً سيجب عليك متابعة حسابي في سناب شات لتشغيل البوت</b>"
     )
     
     markup = types.InlineKeyboardMarkup()
@@ -60,12 +72,7 @@ def handle_verification(call):
     user_id = call.message.chat.id
     
     if call.data == "snap_step_1":
-        fail_msg = (
-            "<b>نعتذر منك لم يتم التحقق من متابعتك لحساب سناب شات ❌👻</b>\n"
-            "الرجاء الضغط على متابعة الحساب وسيتم توجيهك لسناب شات وبعد المتابعة اضغط على زر <b>تفعيل البوت 🔓</b>\n\n"
-            "<b>We apologize, but your Snapchat account follow request has not been verified. ❌👻</b>\n"
-            "Please click Follow Account and you will be redirected to Snapchat. After following, click the <b>Activate</b> button. 🔓"
-        )
+        fail_msg = "<b>نعتذر منك لم يتم التحقق من المتابعة ❌</b>"
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("متابعة الحساب 👻 Follow", url=SNAP_LINK))
         markup.add(types.InlineKeyboardButton("تفعيل البوت 🔓 Activate", callback_data="snap_step_2"))
@@ -73,15 +80,10 @@ def handle_verification(call):
         
     elif call.data == "snap_step_2":
         user_status[user_id] = "verified"
-        success_text = (
-            "<b>تم تفعيل البوت بنجاح ✅</b>\n"
-            "<b>الرجاء ارسال الرابط 🔗</b>\n\n"
-            "<b>The bot has been successfully activated ✅</b>\n"
-            "<b>Please send the link 🔗</b>"
-        )
+        success_text = "<b>تم تفعيل البوت بنجاح ✅ أرسل الرابط الآن</b>"
         bot.send_message(user_id, success_text, parse_mode='HTML')
 
-# --- 4. معالج تحميل سناب شات المطور مع ميزة التنظيف ---
+# --- 4. معالج تحميل سناب شات ---
 @bot.message_handler(func=lambda message: True)
 def handle_snap(message):
     user_id = message.chat.id
@@ -92,8 +94,7 @@ def handle_snap(message):
         return
 
     if "snapchat.com" in url:
-        loading_text = "<b>جاري التحميل ... ⏳\nLoading... ⏳</b>"
-        prog = bot.reply_to(message, loading_text, parse_mode='HTML')
+        prog = bot.reply_to(message, "<b>جاري التحميل ... ⏳</b>", parse_mode='HTML')
         
         ydl_opts = {
             'format': 'best',
@@ -110,36 +111,18 @@ def handle_snap(message):
                 
                 if video_url:
                     bot.send_video(user_id, video_url)
-                    done_text = "<b>تم التحميل ✅\nDone ✅</b>"
-                    bot.send_message(user_id, done_text, parse_mode='HTML')
                     bot.delete_message(user_id, prog.message_id)
                 else:
                     raise Exception()
         except Exception:
-            error_tech = (
-                "<b>نعتذر منك نواجه الان مشكله تقنية وسيتم معالجتها في أقرب وقت ❌</b>\n\n"
-                "<b>We apologize, we are currently experiencing a technical issue and it will be resolved as soon as possible ❌</b>"
-            )
-            bot.edit_message_text(error_tech, user_id, prog.message_id, parse_mode='HTML')
+            bot.edit_message_text("<b>عذراً، حدث خطأ فني ❌</b>", user_id, prog.message_id, parse_mode='HTML')
         finally:
-            # استدعاء التنظيف بعد كل عملية (حتى لو فشلت)
             reset_server_environment()
-            
     else:
-        wrong_link = (
-            "<b>الرجاء ارسال رابط الصحيح ❌</b>\n"
-            "<b>Please send the correct link ❌</b>"
-        )
-        bot.reply_to(message, wrong_link, parse_mode='HTML')
+        bot.reply_to(message, "<b>الرجاء ارسال رابط صحيح ❌</b>", parse_mode='HTML')
 
-# --- 5. التشغيل الآمن ---
+# --- 5. التشغيل النهائي ---
 if __name__ == "__main__":
     keep_alive()
-    try:
-        bot.remove_webhook()
-    except:
-        pass
-    time.sleep(1)
     print("Snap Bot is starting...")
-    # تعديل البولينج ليكون أكثر استقراراً
-    bot.infinity_polling(timeout=20, long_polling_timeout=10, restart_on_change=False)
+    bot.infinity_polling(timeout=20, long_polling_timeout=10)
